@@ -11,10 +11,10 @@
 #include <openssl/conf.h>
 #endif
 
-#define HOST_NAME "smtp.gmail.com"
-#define HOST_PORT "465"
 #define BASE64_LOGIN
 #define BASE64_PASSWORD
+const char HOST_NAME[] = "smtp.gmail.com";
+const char HOST_PORT[] = "465";
 
 void init_openssl_library(void)
 {
@@ -64,8 +64,14 @@ int main()
 	web = BIO_new_ssl_connect(ctx);
 	if (web == NULL) handleFailure("new ssl connect");
 
-	res = BIO_set_conn_hostname(web, HOST_NAME ":" HOST_PORT);
+	char *name = malloc(strlen(HOST_NAME) + strlen(HOST_PORT) + 1 + 1);
+	if (name == NULL) handleFailure("malloc fail");
+	strcpy(name, HOST_NAME);
+	strcat(name, ":");
+	strcat(name, HOST_PORT);
+	res = BIO_set_conn_hostname(web, name);
 	if (res != 1) handleFailure("set conn hostname");
+	free(name);
 
 	BIO_get_ssl(web, &ssl);
 	if (ssl == NULL) handleFailure("get ssl");
@@ -76,6 +82,13 @@ int main()
 
 	res = SSL_set_tlsext_host_name(ssl, HOST_NAME);
 	if (res != 1) handleFailure("set tlsext");
+
+	res = X509_VERIFY_PARAM_set1_host(
+		SSL_get0_param(ssl),
+		HOST_NAME,
+		strlen(HOST_NAME)
+	);
+	if (res != 1) handleFailure("set1_host() fail");
 
 	out = BIO_new_fp(stdout, BIO_NOCLOSE);
 	if (out == NULL) handleFailure("new fp");
@@ -92,8 +105,6 @@ int main()
 
 	res = SSL_get_verify_result(ssl);
 	if (res != X509_V_OK) handleFailure("verify result");
-
-	// TODO: hostname verification
 
 	int len = 0;
 	char buff[4096];
